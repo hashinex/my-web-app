@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ZIP Code Time Adder</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap');
+    :root {
+      --card-bg: rgba(255, 255, 255, 0.15);
+      --text-color: #333;
+      --highlight: #007bff;
+      --bg-gradient: linear-gradient(to right, #a1c4fd, #c2e9fb);
+    }
+    body.dark {
+      --card-bg: rgba(0, 0, 0, 0.3);
+      --text-color: #fff;
+      --highlight: #ffd700;
+      --bg-gradient: linear-gradient(to right, #1f1f1f, #3b3b3b);
+    }
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: var(--bg-gradient);
+      text-align: center;
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-color);
+      transition: background 0.3s, color 0.3s;
+    }
+    .container {
+      background: var(--card-bg);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: 30px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+      padding: 50px 40px;
+      width: 90%;
+      max-width: 700px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+    }
+    .input-group {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      margin-bottom: 30px;
+      flex-wrap: wrap;
+    }
+    .input-group input {
+      background: rgba(255, 255, 255, 0.4);
+      border: none;
+      padding: 15px 20px;
+      font-size: 18px;
+      border-radius: 15px;
+      width: 120px;
+      color: var(--text-color);
+      transition: all 0.3s ease;
+      font-weight: 500;
+    }
+    .input-group input::placeholder {
+      color: var(--text-color);
+      opacity: 0.8;
+    }
+    .input-group input:focus {
+      outline: none;
+      transform: scale(1.08);
+    }
+    button {
+      background-color: var(--highlight);
+      color: white;
+      padding: 14px 30px;
+      border: none;
+      border-radius: 12px;
+      font-size: 18px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    }
+    body.dark button {
+      background-color: #2196f3;
+      color: #fff;
+    }
+    button:hover {
+      transform: scale(1.05);
+    }
+    #result {
+      font-size: 22px;
+      margin-top: 30px;
+      font-weight: 400;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 0.6s ease-in-out, transform 0.6s ease-in-out;
+      min-height: 60px;
+    }
+    #result.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .highlight {
+      font-weight: bold;
+      color: var(--highlight);
+      font-size: 28px;
+      display: block;
+      margin-top: 10px;
+    }
+    .theme-toggle {
+      margin-top: 30px;
+      position: relative;
+      width: 70px;
+      height: 34px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 50px;
+      border: 1px solid rgba(255,255,255,0.3);
+      cursor: pointer;
+      user-select: none;
+    }
+    .theme-toggle .slider {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      width: 26px;
+      height: 26px;
+      background: white;
+      border-radius: 50%;
+      transition: transform 0.3s ease;
+    }
+    .theme-toggle::before,
+    .theme-toggle::after {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 16px;
+      color: white;
+      pointer-events: none;
+    }
+    .theme-toggle::before {
+      content: '☀️';
+      left: 8px;
+    }
+    .theme-toggle::after {
+      content: '🌙';
+      right: 8px;
+    }
+    body.dark .theme-toggle .slider {
+      transform: translateX(36px);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1 style="color: var(--text-color); font-weight: 600;">ZIP Code Time Adder</h1>
+    <div class="input-group">
+      <input type="text" id="zipcode" placeholder="ZIP Code" maxlength="5" />
+      <input type="number" id="days" placeholder="Days" min="0" />
+      <input type="number" id="hours" placeholder="Hours" min="0" max="23" />
+      <input type="number" id="minutes" placeholder="Minutes" min="0" max="59" />
+    </div>
+    <button onclick="addTime()">Add Time</button>
+    <div id="result"></div>
+    <div class="theme-toggle" onclick="toggleDarkMode()">
+      <div class="slider"></div>
+    </div>
+  </div>
+
+  <audio id="ping" src="https://assets.mixkit.co/sfx/preview/mixkit-classic-click-1117.mp3"></audio>
+
+  <script>
+    async function getLocationInfo(zip) {
+      try {
+        const res = await fetch(`https://api.zippopotam.us/us/${zip}`);
+        if (!res.ok) throw new Error('Invalid ZIP code.');
+        const data = await res.json();
+        const { latitude, longitude, 'place name': placeName, state } = data.places[0];
+        return {
+          latitude,
+          longitude,
+          place: `${placeName}, ${state}`
+        };
+      } catch (e) {
+        console.error("Location lookup error:", e);
+        return null;
+      }
+    }
+
+    async function getTimezoneFromCoordinates(latitude, longitude) {
+      try {
+        const tzRes = await fetch(`https://timeapi.io/api/TimeZone/coordinate?latitude=${latitude}&longitude=${longitude}`);
+        if (!tzRes.ok) throw new Error("Timezone lookup failed.");
+        const tzData = await tzRes.json();
+        return tzData.timeZone;
+      } catch (e) {
+        console.error("Timezone fetch error:", e);
+        return null;
+      }
+    }
+
+    async function addTime() {
+      const zip = document.getElementById("zipcode").value.trim();
+      const days = parseInt(document.getElementById("days").value) || 0;
+      const hours = parseInt(document.getElementById("hours").value) || 0;
+      const minutes = parseInt(document.getElementById("minutes").value) || 0;
+
+      const resultDiv = document.getElementById("result");
+      resultDiv.classList.remove("show");
+      resultDiv.innerText = '';
+
+      if (!zip.match(/^\d{5}$/)) {
+        resultDiv.innerText = "Please enter a valid 5-digit US ZIP code.";
+        resultDiv.classList.add("show");
+        return;
+      }
+      if ((days + hours + minutes) === 0) {
+        resultDiv.innerText = "Please enter a valid duration to add.";
+        resultDiv.classList.add("show");
+        return;
+      }
+
+      resultDiv.innerText = "Looking up timezone...";
+      resultDiv.classList.add("show");
+
+      const location = await getLocationInfo(zip);
+      if (!location) {
+        resultDiv.innerText = "Location lookup failed.";
+        resultDiv.classList.add("show");
+        return;
+      }
+
+      const timezone = await getTimezoneFromCoordinates(location.latitude, location.longitude);
+      if (!timezone) {
+        resultDiv.innerText = "Timezone lookup failed.";
+        resultDiv.classList.add("show");
+        return;
+      }
+
+      const nowUtc = new Date();
+      const addedTime = new Date(nowUtc.getTime() + days * 86400000 + hours * 3600000 + minutes * 60000);
+
+      const options = {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+        timeZone: timezone
+      };
+
+      const dateOptions = {
+        year: "2-digit",
+        month: "2-digit",
+        day: "2-digit",
+        timeZone: timezone
+      };
+
+      const timeString = addedTime.toLocaleTimeString("en-US", options);
+      const dateString = addedTime.toLocaleDateString("en-CA", dateOptions).replace(/-/g, "-");
+
+      resultDiv.innerHTML =
+        `Time in <strong>${location.place}</strong> after ${days}d ${hours}h ${minutes}m will be:<br><span class="highlight">${dateString}, ${timeString}</span>`;
+
+      document.getElementById("ping").play();
+      setTimeout(() => resultDiv.classList.add("show"), 50);
+    }
+
+    function toggleDarkMode() {
+      document.body.classList.toggle("dark");
+    }
+  </script>
+</body>
+</html>
