@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>ZIP Code Time Adder</title>
-  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="icon" type="image/png" href="favicon.png" />
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap');
     :root {
@@ -148,6 +148,20 @@
     body.dark .theme-toggle .slider {
       transform: translateX(36px);
     }
+    .spinner {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(0, 0, 0, 0.1);
+      border-top: 3px solid var(--highlight);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-left: 10px;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0); }
+      100% { transform: rotate(360deg); }
+    }
   </style>
 </head>
 <body>
@@ -169,16 +183,23 @@
   <audio id="ping" src="https://assets.mixkit.co/sfx/preview/mixkit-classic-click-1117.mp3"></audio>
 
   <script>
+    function timeoutPromise(promise, ms = 5000) {
+      return Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Request timed out")), ms))
+      ]);
+    }
+
     async function getLocationInfo(zip) {
       try {
-        const res = await fetch(`https://api.zippopotam.us/us/${zip}`);
+        const res = await timeoutPromise(fetch(`https://api.zippopotam.us/us/${zip}`));
         if (!res.ok) throw new Error('Invalid ZIP code.');
         const data = await res.json();
-        const { latitude, longitude, 'place name': placeName, state } = data.places[0];
+        const place = data.places[0];
         return {
-          latitude,
-          longitude,
-          place: `${placeName}, ${state}`
+          latitude: place.latitude,
+          longitude: place.longitude,
+          place: `${place['place name']}, ${place.state}`
         };
       } catch (e) {
         console.error("Location lookup error:", e);
@@ -188,10 +209,13 @@
 
     async function getTimezoneFromCoordinates(latitude, longitude) {
       try {
-        const tzRes = await fetch(`https://timeapi.io/api/TimeZone/coordinate?latitude=${latitude}&longitude=${longitude}`);
-        if (!tzRes.ok) throw new Error("Timezone lookup failed.");
-        const tzData = await tzRes.json();
-        return tzData.timeZone;
+        const username = 'hashinex'; // GeoNames username
+        const res = await timeoutPromise(
+          fetch(`https://secure.geonames.org/timezoneJSON?lat=${latitude}&lng=${longitude}&username=${username}`)
+        );
+        if (!res.ok) throw new Error("GeoNames timezone fetch failed.");
+        const data = await res.json();
+        return data.timezoneId;
       } catch (e) {
         console.error("Timezone fetch error:", e);
         return null;
@@ -206,58 +230,42 @@
 
       const resultDiv = document.getElementById("result");
       resultDiv.classList.remove("show");
-      resultDiv.innerText = '';
+      resultDiv.innerHTML = "";
 
       if (!zip.match(/^\d{5}$/)) {
         resultDiv.innerText = "Please enter a valid 5-digit US ZIP code.";
         resultDiv.classList.add("show");
         return;
       }
+
       if ((days + hours + minutes) === 0) {
         resultDiv.innerText = "Please enter a valid duration to add.";
         resultDiv.classList.add("show");
         return;
       }
 
-      resultDiv.innerText = "Looking up timezone...";
+      resultDiv.innerHTML = `Looking up timezone <span class="spinner"></span>`;
       resultDiv.classList.add("show");
 
       const location = await getLocationInfo(zip);
       if (!location) {
-        resultDiv.innerText = "Location lookup failed.";
-        resultDiv.classList.add("show");
+        resultDiv.innerText = "Location lookup failed. Try again.";
         return;
       }
 
       const timezone = await getTimezoneFromCoordinates(location.latitude, location.longitude);
       if (!timezone) {
-        resultDiv.innerText = "Timezone lookup failed.";
-        resultDiv.classList.add("show");
+        resultDiv.innerText = "Timezone lookup failed. Try again.";
         return;
       }
 
       const nowUtc = new Date();
       const addedTime = new Date(nowUtc.getTime() + days * 86400000 + hours * 3600000 + minutes * 60000);
 
-      const dateOptions = {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        timeZone: timezone
-      };
-      const dateString = addedTime.toLocaleDateString('en-US', dateOptions);
+      const dateOptions = { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: timezone };
+      const timeOptions = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: timezone };
 
-      const timeOptions = {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false,
-        timeZone: timezone
-      };
-      const timeString = addedTime.toLocaleTimeString('en-US', timeOptions);
-
-      resultDiv.innerHTML =
-        `Time in <strong>${location.place}</strong> after ${days}d ${hours}h ${minutes}m will be:<br><span class="highlight">${dateString} ${timeString}</span>`;
+      resultDiv.innerHTML = `Time in <strong>${location.place}</strong> after ${days}d ${hours}h ${minutes}m will be:<br><span class="highlight">${addedTime.toLocaleDateString('en-US', dateOptions)} ${addedTime.toLocaleTimeString('en-US', timeOptions)}</span>`;
 
       document.getElementById("ping").play();
       setTimeout(() => resultDiv.classList.add("show"), 50);
