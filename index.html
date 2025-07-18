@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>ZIP Code Time Adder</title>
+  <link rel="icon" type="image/png" href="favicon.png">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap');
     :root {
@@ -238,9 +239,6 @@
       const nowUtc = new Date();
       const addedTime = new Date(nowUtc.getTime() + days * 86400000 + hours * 3600000 + minutes * 60000);
 
-      // --- Start of changes ---
-
-      // Format for date: MM/DD/YYYY
       const dateOptions = {
         year: 'numeric',
         month: '2-digit',
@@ -249,20 +247,17 @@
       };
       const dateString = addedTime.toLocaleDateString('en-US', dateOptions);
 
-      // Format for time: HH:mm:ss (24-hour format)
       const timeOptions = {
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit',
-        hour12: false, // Use 24-hour format
+        hour12: false,
         timeZone: timezone
       };
       const timeString = addedTime.toLocaleTimeString('en-US', timeOptions);
 
       resultDiv.innerHTML =
         `Time in <strong>${location.place}</strong> after ${days}d ${hours}h ${minutes}m will be:<br><span class="highlight">${dateString} ${timeString}</span>`;
-
-      // --- End of changes ---
 
       document.getElementById("ping").play();
       setTimeout(() => resultDiv.classList.add("show"), 50);
